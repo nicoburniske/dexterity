@@ -1,13 +1,11 @@
 package nicoburniske.dexterity.exchange
 
 
-import java.time.format.DateTimeFormatter
-import java.time.{Instant, ZoneId, ZonedDateTime}
-
 import generated.sushi.exchange.{Pair, Swap, Token}
 
 import scala.concurrent.duration._
 import scala.math.BigDecimal.RoundingMode
+import scala.scalajs.js
 
 object SwapDetails {
   val SELECTION_BUILDER =
@@ -37,36 +35,37 @@ object SwapDetails {
 }
 
 case class SwapDetails(
-                        pair: String,
-                        price0: BigDecimal,
-                        price1: BigDecimal,
-                        fullName0: String,
-                        fullName1: String,
-                        id: String,
-                        timestamp: BigInt,
-                        amountUSD: BigDecimal,
-                        token0Sold: BigDecimal,
-                        token0Received: BigDecimal,
-                        token1Sold: BigDecimal,
-                        token1Received: BigDecimal) {
+    pair: String,
+    price0: BigDecimal,
+    price1: BigDecimal,
+    fullName0: String,
+    fullName1: String,
+    id: String,
+    timestamp: BigInt,
+    amountUSD: BigDecimal,
+    token0Sold: BigDecimal,
+    token0Received: BigDecimal,
+    token1Sold: BigDecimal,
+    token1Received: BigDecimal) {
 
-  import SwapDetails.{roundAndFormat, round}
+  import SwapDetails.{round, roundAndFormat}
 
   val (token0, token1) = {
     val split = pair.split("-")
     (split(0), split(1))
   }
 
+  val isBuy = token0Received > 0
+
   // TODO: review. not true always
   val realPrice     = if (price0 > price1) price0 else price1
   // TODO: why is there a dash? Deserialization perhaps?
-  val realId = id.split("-").head
+  val realId        = id.split("-").head
   val snowtraceLink = s"https://snowtrace.io/tx/$realId"
 
   val timeFormatted = {
-    val instant  = Instant.ofEpochMilli(timestamp.toLong.seconds.toMillis)
-    val dateTime = ZonedDateTime.ofInstant(instant, ZoneId.of("UTC"))
-    DateTimeFormatter.ISO_ZONED_DATE_TIME.format(dateTime)
+    val instant = new js.Date(timestamp.toLong.seconds.toMillis)
+    instant.toLocaleTimeString()
   }
   val swapDetails   = {
     if (token0Sold.compare(0) == 0) {
@@ -78,11 +77,9 @@ case class SwapDetails(
 
   val message =
     s"""
-       | $pair Whale Alert 🚨
-       |- Transaction Amount: ${roundAndFormat(amountUSD)}
+       |- ${if (isBuy) "BUY" else "SELL"} ${roundAndFormat(amountUSD)}
        |- Timestamp: $timeFormatted
        |- Price: ${roundAndFormat(realPrice)}
        |- $swapDetails
-       |- $snowtraceLink
        |""".stripMargin.strip
 }
