@@ -72,15 +72,20 @@ object DEX {
     val req   = query.toRequest(Endpoints.SUSHISWAP).mapResponseRight(round)
     req
   }
+  def wMemoSwapsQuery(
+      since: Instant,
+      minSwap: BigInt,
+      lastTimestamp: Option[BigInt] = None,
+      lastId: Option[String] = None): SelectionBuilder[RootQuery, Seq[SwapDetails]] = {
+    Queries.pairSwapsSinceInstant(PairAddress.SUSHI_WMEMO_MIM, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
+  }
 
   def wMemoSwapsRequest(
       since: Instant,
       minSwap: BigInt,
       lastTimestamp: Option[BigInt] = None,
       lastId: Option[String] = None): Request[Either[CalibanClientError, Seq[SwapDetails]], Any] = {
-    Queries
-      .pairSwapsSinceInstant(PairAddress.SUSHI_WMEMO_MIM, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
-      .toRequest(Endpoints.SUSHISWAP)
+    wMemoSwapsQuery(since, minSwap, lastTimestamp, lastId).toRequest(Endpoints.SUSHISWAP)
   }
 
   private def round(res: Option[(String, BigDecimal)]): Option[(String, BigDecimal)] = {
