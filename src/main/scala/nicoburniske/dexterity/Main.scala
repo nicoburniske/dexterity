@@ -2,8 +2,8 @@ package nicoburniske.dexterity
 
 import java.time.Instant
 
-import com.github.uosis.laminar.webcomponents.material.{LinearProgress, Slider}
 import com.raquo.laminar.api.L._
+import nicoburniske.dexterity.components.material.{LinearProgressBar, Slider}
 import nicoburniske.dexterity.exchange.SwapDetails
 import nicoburniske.dexterity.task.OrderbookVolume
 import org.scalajs.dom
@@ -14,26 +14,52 @@ import scala.math.BigDecimal
 import scala.math.BigDecimal.RoundingMode
 
 object Main {
-  val CONTAINER            = "appContainer"
-  val TICK_INTERVAL        = 10.seconds
-  val MIN_HISTORY_INTERVAL = 1.hours
-  val MAX_HISTORY_INTERVAL = 4.hours
+  val CONTAINER                  = "appContainer"
+  val TICK_INTERVAL              = 10.seconds
+  val MIN_HISTORY_INTERVAL_HOURS = 0
+  val MAX_HISTORY_INTERVAL_HOURS = 4
 
-  val swaps    = Var(Seq.empty[SwapDetails])
-  val interval = Var(MIN_HISTORY_INTERVAL.toSeconds)
+  val $tick                          = EventStream.periodic(TICK_INTERVAL.toMillis.toInt)
+  val interval: Var[FiniteDuration]  = Var(1.hours)
+  val intervalSignal: Signal[Double] = interval.signal.map(_.toMinutes.toDouble)
+  // val $updateSwaps = EventStream.merge($tick, intervalSignal.changes)
 
-  val writer: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
-    next ++ curr
+  val swaps = Var(Seq.empty[SwapDetails])
+
+  /**
+   * Add new swaps since last tick. Removes swaps that are older than {Now - Interval}.
+   */
+  val swapUpdater: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
+    val since        = Instant.now().toEpochMilli.millis - interval.now()
+    val removeTooOld = curr
+      .reverse
+      .dropWhile { swap =>
+        val stamp = swap.timestamp.longValue.seconds
+        stamp < since
+      }
+      .reverse
+    next ++ removeTooOld
   })
+
+  /**
+   * TODO: see if can replace tick.resetTo with merged event stream.
+   *
+   * Reset all swaps and emit a tick event (force refresh of swaps).
+   */
+  def resetSwaps(): Unit = {
+    swaps.set(Seq.empty)
+    $tick.resetTo(0)
+  }
 
   def round(b: BigDecimal): BigDecimal = b.setScale(3, RoundingMode.HALF_UP)
 
   val sellsAndBuys = swaps.signal.map { swaps =>
-    val grouped             = swaps.groupMapReduce(_.isBuy)(_.amountUSD)(_ + _)
+    val grouped = swaps.groupMapReduce(_.isBuy)(_.amountUSD)(_ + _)
     (grouped.getOrElse(false, BigDecimal(0)), grouped.getOrElse(true, BigDecimal(0)))
   }
-  val sellVolume   = sellsAndBuys.map(_._1).map(round).map(_.toString)
-  val buyVolume    = sellsAndBuys.map(_._2).map(round).map(_.toString)
+
+  val sellVolume = sellsAndBuys.map(_._1).map(round).map(_.toString)
+  val buyVolume  = sellsAndBuys.map(_._2).map(round).map(_.toString)
 
   val sells     = swaps.signal.map(swaps => swaps.count(!_.isBuy))
   val buys      = swaps.signal.map(swaps => swaps.count(_.isBuy))
@@ -50,19 +76,17 @@ object Main {
       }
   }
 
-  val $tick = EventStream.periodic(TICK_INTERVAL.toMillis.toInt)
-
   val newSwaps = $tick.flatMap { _ =>
     val currSwaps = swaps.now()
     val since     = currSwaps
       .headOption
       .map(_.timestamp.toLong.seconds.toMillis)
       .map(Instant.ofEpochMilli)
-      .getOrElse(Instant.now().minusSeconds(interval.now()))
+      .getOrElse(Instant.now().minusSeconds(interval.now().toSeconds))
     val seen      = mutable.HashSet.from(swaps.now().map(_.id))
     OrderbookVolume.wMemoSwapsPaginated(since, seen = seen).map {
       case Left(error)  =>
-        println(s"FUCK ${error.getMessage()}")
+        println(s"Failed to retrieve swaps ${error.getMessage()}")
         Seq.empty
       case Right(value) =>
         println(s"${value.size} swaps found")
@@ -70,7 +94,7 @@ object Main {
     }
   }
 
-  val swapsToDiv = swaps.signal.map { swaps => div(swaps.map(_.message).map(div(_))) }
+  val swapsToList = swaps.signal.map { swaps => div(swaps.map(_.message).map(div(_))) }
 
   val myApp = div(
     div("Tick #: ", child.text <-- $tick.map(_.toString)),
@@ -81,18 +105,20 @@ object Main {
     div("Num buys: ", child.text <-- buys),
     div(child <-- volumeRatio.map(_.toString)),
     Slider(
-      _.pin  := true,
-      _.min  := 1,
-      _.max  := 4,
-      _.step := 1
-      // _.onChange.map{v => v.}
+      _.pin   := true,
+      _.min   := MIN_HISTORY_INTERVAL_HOURS,
+      _.max   := MAX_HISTORY_INTERVAL_HOURS,
+      _.step  := 0.5,
+      _.value := 1,
+      slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
     ),
-    LinearProgress(
+    LinearProgressBar(
       _.progress <-- volumeRatio.map(_.toDouble)
     ),
     div(
-      newSwaps --> writer,
-      child <-- swapsToDiv
+      newSwaps --> swapUpdater,
+      intervalSignal.changes --> (_ => resetSwaps()),
+      child <-- swapsToList
     )
   )
 

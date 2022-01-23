@@ -3,28 +3,37 @@ import sbt.Compile
 name         := "dexterity"
 version      := "0.1"
 scalaVersion := "2.13.8"
-
-val classMain         = "nicoburniske.dexterity.Main"
-val sttpVersion       = "3.3.18"
-val calibanVersionSbt = "1.3.2"
+val classMain = "nicoburniske.dexterity.Main"
 
 enablePlugins(CalibanPlugin, ScalaJSPlugin, ScalaJSBundlerPlugin)
-resolvers += Resolver.githubPackages("uosis")
-githubTokenSource := TokenSource.GitConfig("github.token")
 
 scalaJSUseMainModuleInitializer := true
 ThisBuild / evictionErrorLevel  := Level.Info
 
+val calibanVersionSbt = "1.3.2"
+
 libraryDependencies ++= Seq(
-  "org.scala-js"          %%% "scalajs-dom"                     % "1.1.0",
-  "com.raquo"             %%% "laminar"                         % "0.13.1",
-  "com.github.uosis"      %%% "laminar-web-components-material" % "0.1.0",
-  "org.typelevel"         %%% "cats-effect"                     % "3.3.4",
-  "com.github.ghostdogpr"  %% "caliban-client"                  % calibanVersionSbt,
-  "com.github.ghostdogpr" %%% "caliban-client-laminext"         % calibanVersionSbt
+  "org.scala-js"          %%% "scalajs-dom"             % "2.1.0",
+  "com.raquo"             %%% "laminar"                 % "0.13.1",
+  "com.github.ghostdogpr"  %% "caliban-client"          % calibanVersionSbt,
+  "com.github.ghostdogpr" %%% "caliban-client-laminext" % calibanVersionSbt
 )
 
-Compile / npmDependencies += "require" -> "2.4.20"
+Compile / npmDependencies ++= Seq(
+  "@material/mwc-linear-progress" -> "0.18.0",
+  "@material/mwc-slider"          -> "0.18.0",
+  "@material/mwc-list"            -> "0.25.3"
+)
+
+scalaJSLinkerConfig ~= {
+  // Producing source maps throws warnings on material web components complaining about missing .ts files. Not sure why.
+  _.withSourceMap(false)
+}
+
+//scalacOptions ++= Seq(
+//  "-Vclasspath"
+//)
+
 // fastOptJS::webpack
 
 lazy val app = (project in file(".")).settings(

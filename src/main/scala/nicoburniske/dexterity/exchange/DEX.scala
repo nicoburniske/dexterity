@@ -67,11 +67,14 @@ object DEX {
     }
   }
 
-  def priceWMEMO(): Request[Either[CalibanClientError, Option[(String, BigDecimal)]], Any] = {
-    val query = Queries.pairData(PairAddress.SUSHI_WMEMO_MIM)(Pair.name ~ Pair.token1Price)
-    val req   = query.toRequest(Endpoints.SUSHISWAP).mapResponseRight(round)
-    req
+  def queryPriceWMEMO(): SelectionBuilder[RootQuery, Option[(String, BigDecimal)]] = {
+    Queries.pairData(PairAddress.SUSHI_WMEMO_MIM)(Pair.name ~ Pair.token1Price)
   }
+
+  def priceWMEMO(): Request[Either[CalibanClientError, Option[(String, BigDecimal)]], Any] = {
+    queryPriceWMEMO().toRequest(Endpoints.SUSHISWAP).mapResponseRight(round)
+  }
+
   def wMemoSwapsQuery(
       since: Instant,
       minSwap: BigInt,
