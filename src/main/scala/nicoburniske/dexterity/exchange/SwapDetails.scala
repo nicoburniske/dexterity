@@ -28,6 +28,13 @@ object SwapDetails {
     d.setScale(scale, RoundingMode.HALF_UP)
   }
 
+  /**
+   * Number sign gets printed fairly weirdly. Remove and re-add it explicitly.
+   * @param d
+   *   the number to round and format
+   * @return
+   *   a dollar representation of the value
+   */
   def roundAndFormat(d: BigDecimal): String = {
     val s = FORMATTER.format(round(d).toDouble)
     "$" + { s.substring(1, s.length) }
@@ -48,8 +55,6 @@ case class SwapDetails(
     token1Sold: BigDecimal,
     token1Received: BigDecimal) {
 
-  import SwapDetails.{round, roundAndFormat}
-
   val (token0, token1) = {
     val split = pair.split("-")
     (split(0), split(1))
@@ -67,19 +72,14 @@ case class SwapDetails(
     val instant = new js.Date(timestamp.toLong.seconds.toMillis)
     instant.toLocaleTimeString()
   }
-  val swapDetails   = {
-    if (token0Sold.compare(0) == 0) {
-      s"${round(token1Sold)} $token1 swapped for ${round(token0Received)} $token0"
-    } else {
-      s"${round(token0Sold)} $token0 swapped for ${round(token1Received)} $token1"
-    }
+
+  val token0traded  = {
+    val traded = if (token0Received == 0) token0Sold else token0Received
+    traded.setScale(3, RoundingMode.HALF_UP)
   }
 
-  val message =
-    s"""
-       |- ${if (isBuy) "BUY" else "SELL"} ${roundAndFormat(amountUSD)}
-       |- Timestamp: $timeFormatted
-       |- Price: ${roundAndFormat(realPrice)}
-       |- $swapDetails
-       |""".stripMargin.strip
+  val token1traded  = {
+    val traded = if (token1Received == 0) token1Sold else token1Received
+    traded.setScale(3, RoundingMode.HALF_UP)
+  }
 }

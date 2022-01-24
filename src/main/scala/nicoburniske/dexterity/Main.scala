@@ -2,9 +2,8 @@ package nicoburniske.dexterity
 
 import java.time.Instant
 
-import com.raquo.laminar.api.L
 import com.raquo.laminar.api.L._
-import nicoburniske.dexterity.components.material.{LinearProgressBar, ListItem, Slider}
+import nicoburniske.dexterity.components.material.{LinearProgressBar, Slider}
 import nicoburniske.dexterity.exchange.SwapDetails
 import nicoburniske.dexterity.task.OrderbookVolume
 import org.scalajs.dom
@@ -96,61 +95,85 @@ object Main {
     }
   }.filter(_.nonEmpty) // remove useless events to avoid recalculation.
 
-  val swapsToList           = swaps.signal.map { swaps => div(swaps.map(_.message).map(div(_))) }
-  val swapsToListComponents = swaps.signal.map(swapList)
+  val swapsToTable = swaps.signal.map(createTable)
 
-  def swapList(swaps: Seq[SwapDetails]) = {
-    val elements = swaps.map { swap =>
-      ListItem(
-        // TODO: wrap in div?
-        _.slots.default(
-            L.span(if (swap.isBuy) "BUY" else "SELL", if (swap.isBuy) color.green else color.red),
-            L.span(SwapDetails.roundAndFormat(swap.amountUSD)),
-            L.span(swap.timeFormatted),
-            L.a(href := swap.snowtraceLink)
-          )
-        )
-    }
-    components
-      .material
-      .List(
-        _.slots.default(elements: _*)
-      )
+  val priceSignal = swaps.signal.map(_.headOption).map {
+    case Some(value) => SwapDetails.roundAndFormat(value.realPrice)
+    case None        => ""
   }
 
-  val priceStream = swaps.signal.map { swaps =>
-    swaps.headOption match {
-      case Some(value) => SwapDetails.roundAndFormat(value.realPrice)
-      case None        => ""
+  val poolNameSignal = swaps.signal.map(_.headOption).map {
+    case Some(value) => value.pair
+    case None        => "Pair"
+  }
+
+  val token0Signal = swaps.signal.map(_.headOption).map {
+    case Some(value) => value.token0
+    case None        => "Token0"
+  }
+
+  val token1Signal = swaps.signal.map(_.headOption).map {
+    case Some(value) => value.token1
+    case None        => "Token1"
+  }
+
+  def createTable(swaps: Seq[SwapDetails]) = {
+    val elements = swaps.map { swap =>
+      val isBuy    = if (swap.isBuy) "BUY" else "SELL"
+      val cssClass = if (swap.isBuy) "isBuy" else "isSell"
+      ol(
+        li(strong(isBuy)),
+        li(SwapDetails.roundAndFormat(swap.amountUSD)),
+        // li(SwapDetails.roundAndFormat(swap.realPrice)),
+        li(swap.token0traded.toString()),
+        li(swap.token1traded.toString()),
+        li(swap.timeFormatted),
+        li(a(href := swap.snowtraceLink, swap.realId.take(10), color.blue)),
+        cls := ("tableRow", cssClass)
+      )
     }
+    val headers  = ol(
+      li("Type"),
+      li("Total USD"),
+      li(child.text <-- token0Signal.map(_ + " swapped")),
+      li(child.text <-- token1Signal.map(_ + " swapped")),
+      li("Time"),
+      li("Transaction"),
+      cls := ("tableRow", "tableHeader")
+    )
+    headers +: elements
   }
 
   val myApp = div(
+    cls := "app",
+    // EFFECTS
+    newSwaps --> swapUpdater,
+    intervalSignal.changes --> (_ => resetSwaps()),
+    // CONTENT
+    h2(child.text <-- poolNameSignal, cls := "pairHeader"),
     div("Tick #: ", child.text <-- $tick.map(_.toString)),
     div("Total Swaps: ", child.text <-- swapCount),
     div("Total Volume: ", child.text <-- totalVolume),
     div("Total sell volume: ", child.text <-- sellVolume),
-    div("Current price: ", child.text <-- priceStream),
+    div("Current price: ", child.text <-- priceSignal),
     div("Num sells: ", child.text <-- sells),
     div("Total buy volume: ", child.text <-- buyVolume),
     div("Num buys: ", child.text <-- buys),
     div(child <-- volumeRatio.map(_.toString)),
     Slider(
-      _.pin   := true,
-      _.min   := MIN_HISTORY_INTERVAL_HOURS,
-      _.max   := MAX_HISTORY_INTERVAL_HOURS,
-      _.step  := 0.5,
-      _.value := 1,
-      _.pin   := true,
+      _.pin                               := true,
+      _.min                               := MIN_HISTORY_INTERVAL_HOURS,
+      _.max                               := MAX_HISTORY_INTERVAL_HOURS,
+      _.step                              := 0.5,
+      _.value                             := 1,
+      _.pin                               := true,
       slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
     ),
     LinearProgressBar(
       _.progress <-- volumeRatio.map(_.toDouble)
     ),
     div(
-      newSwaps --> swapUpdater,
-      intervalSignal.changes --> (_ => resetSwaps()),
-      child <-- swapsToListComponents
+      children <-- swapsToTable
     )
   )
 
