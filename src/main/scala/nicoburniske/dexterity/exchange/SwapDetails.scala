@@ -1,6 +1,5 @@
 package nicoburniske.dexterity.exchange
 
-
 import generated.sushi.exchange.{Pair, Swap, Token}
 
 import scala.concurrent.duration._
@@ -30,7 +29,8 @@ object SwapDetails {
   }
 
   def roundAndFormat(d: BigDecimal): String = {
-    FORMATTER.format(round(d).toDouble)
+    val s = FORMATTER.format(round(d).toDouble)
+    "$" + { s.substring(1, s.length) }
   }
 }
 

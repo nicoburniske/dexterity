@@ -15,7 +15,7 @@ import scala.scalajs.js.annotation.JSImport
  *
  * Lists are continuous, vertical indexes of text or images.
  *
- * ` @material/mwc-list@0.18.0 `
+ * {@literal @material/mwc-list@0.18.0}
  *
  * @see
  *   <a href="https://github.com/material-components/material-components-web-components/tree/master/packages/tab-bar">Component

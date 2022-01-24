@@ -2,8 +2,9 @@ package nicoburniske.dexterity
 
 import java.time.Instant
 
+import com.raquo.laminar.api.L
 import com.raquo.laminar.api.L._
-import nicoburniske.dexterity.components.material.{LinearProgressBar, Slider}
+import nicoburniske.dexterity.components.material.{LinearProgressBar, ListItem, Slider}
 import nicoburniske.dexterity.exchange.SwapDetails
 import nicoburniske.dexterity.task.OrderbookVolume
 import org.scalajs.dom
@@ -16,8 +17,8 @@ import scala.math.BigDecimal.RoundingMode
 object Main {
   val CONTAINER                  = "appContainer"
   val TICK_INTERVAL              = 10.seconds
-  val MIN_HISTORY_INTERVAL_HOURS = 0
-  val MAX_HISTORY_INTERVAL_HOURS = 4
+  val MIN_HISTORY_INTERVAL_HOURS = 1.0
+  val MAX_HISTORY_INTERVAL_HOURS = 8.0
 
   val $tick                          = EventStream.periodic(TICK_INTERVAL.toMillis.toInt)
   val interval: Var[FiniteDuration]  = Var(1.hours)
@@ -58,8 +59,9 @@ object Main {
     (grouped.getOrElse(false, BigDecimal(0)), grouped.getOrElse(true, BigDecimal(0)))
   }
 
-  val sellVolume = sellsAndBuys.map(_._1).map(round).map(_.toString)
-  val buyVolume  = sellsAndBuys.map(_._2).map(round).map(_.toString)
+  val sellVolume  = sellsAndBuys.map(_._1).map(SwapDetails.roundAndFormat)
+  val buyVolume   = sellsAndBuys.map(_._2).map(SwapDetails.roundAndFormat)
+  val totalVolume = sellsAndBuys.map { case (s, b) => s + b }.map(SwapDetails.roundAndFormat)
 
   val sells     = swaps.signal.map(swaps => swaps.count(!_.isBuy))
   val buys      = swaps.signal.map(swaps => swaps.count(_.isBuy))
@@ -92,14 +94,43 @@ object Main {
         println(s"${value.size} swaps found")
         value
     }
+  }.filter(_.nonEmpty) // remove useless events to avoid recalculation.
+
+  val swapsToList           = swaps.signal.map { swaps => div(swaps.map(_.message).map(div(_))) }
+  val swapsToListComponents = swaps.signal.map(swapList)
+
+  def swapList(swaps: Seq[SwapDetails]) = {
+    val elements = swaps.map { swap =>
+      ListItem(
+        // TODO: wrap in div?
+        _.slots.default(
+            L.span(if (swap.isBuy) "BUY" else "SELL", if (swap.isBuy) color.green else color.red),
+            L.span(SwapDetails.roundAndFormat(swap.amountUSD)),
+            L.span(swap.timeFormatted),
+            L.a(href := swap.snowtraceLink)
+          )
+        )
+    }
+    components
+      .material
+      .List(
+        _.slots.default(elements: _*)
+      )
   }
 
-  val swapsToList = swaps.signal.map { swaps => div(swaps.map(_.message).map(div(_))) }
+  val priceStream = swaps.signal.map { swaps =>
+    swaps.headOption match {
+      case Some(value) => SwapDetails.roundAndFormat(value.realPrice)
+      case None        => ""
+    }
+  }
 
   val myApp = div(
     div("Tick #: ", child.text <-- $tick.map(_.toString)),
     div("Total Swaps: ", child.text <-- swapCount),
+    div("Total Volume: ", child.text <-- totalVolume),
     div("Total sell volume: ", child.text <-- sellVolume),
+    div("Current price: ", child.text <-- priceStream),
     div("Num sells: ", child.text <-- sells),
     div("Total buy volume: ", child.text <-- buyVolume),
     div("Num buys: ", child.text <-- buys),
@@ -110,6 +141,7 @@ object Main {
       _.max   := MAX_HISTORY_INTERVAL_HOURS,
       _.step  := 0.5,
       _.value := 1,
+      _.pin   := true,
       slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
     ),
     LinearProgressBar(
@@ -118,7 +150,7 @@ object Main {
     div(
       newSwaps --> swapUpdater,
       intervalSignal.changes --> (_ => resetSwaps()),
-      child <-- swapsToList
+      child <-- swapsToListComponents
     )
   )
 
