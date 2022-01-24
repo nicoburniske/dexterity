@@ -1,0 +1,60 @@
+@font-face { font-family: Ubuntu; font-weight: bold; src: url("Ubuntu-Bold.ttf");}
+@font-face { font-family: Ubuntu; font-weight: normal; src: url("Ubuntu-Regular.ttf");}
+
+body {
+    background-color: navajowhite;
+}
+
+.app {
+
+}
+
+.pairHeader {
+    font-family: Ubuntu, serif;
+    font-weight: bold;
+    font-size: 40px
+}
+
+.tableHeader {
+    color: white;
+    background-color: rebeccapurple;
+    border: 1px solid rebeccapurple;
+}
+
+.tableRow {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    font-size: 20px;
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    /*font-family: Ubuntu, sans-serif;*/
+    padding: 0;
+    margin: 0;
+}
+
+.tableRow > li {
+    display: table-cell;
+    text-align: center;
+}
+
+.isSell {
+    color: black;
+    background-color: lightcoral;
+    border: 1px solid red;
+}
+
+.isSell > li > strong {
+    color: darkred;
+}
+
+.isBuy {
+    color: black;
+    background-color: lightgreen;
+    border: 1px solid green;
+}
+
+.isBuy > li > strong {
+    color: darkgreen;
+}
+
