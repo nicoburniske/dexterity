@@ -1,18 +1,35 @@
-@font-face { font-family: Ubuntu; font-weight: bold; src: url("Ubuntu-Bold.ttf");}
-@font-face { font-family: Ubuntu; font-weight: normal; src: url("Ubuntu-Regular.ttf");}
+@font-face {
+    font-family: Ubuntu;
+    font-weight: bold;
+    src: url("css/Ubuntu-Bold.ttf");
+}
+
+@font-face {
+    font-family: Ubuntu;
+    font-weight: normal;
+    src: url("css/Ubuntu-Regular.ttf");
+}
 
 body {
-    background-color: navajowhite;
+    background-color: #111;
 }
 
 .app {
 
 }
 
+.stat {
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    font-size: 20px;
+    color: white;
+}
+
 .pairHeader {
     font-family: Ubuntu, serif;
     font-weight: bold;
-    font-size: 40px
+    font-size: 40px;
+    color: white;
 }
 
 .tableHeader {
@@ -58,3 +75,9 @@ body {
     color: darkgreen;
 }
 
+
+.slider {
+    width: 50%;
+    color: pink;
+    align-content: center;
+}

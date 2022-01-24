@@ -7,30 +7,21 @@ import com.raquo.airstream.core.EventStream
 import nicoburniske.dexterity.exchange.{DEX, SwapDetails}
 
 import scala.collection.mutable
-import scala.concurrent.duration.{FiniteDuration, _}
 
 // TODO: convert pagination to websocket?
 object OrderbookVolume {
-  val URI = "https://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
+  val SUSHI_SWAP_AVAX = "https://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 
-  def findSwapsWMEMO(duration: FiniteDuration): EventStream[Either[CalibanClientError, Seq[SwapDetails]]] = {
-    val since = Instant.now().minusMillis(duration.toMillis)
-    wMemoSwapsPaginated(since)
-  }
-
-  def findSwapsWMEMO(seconds : Int): EventStream[Either[CalibanClientError, Seq[SwapDetails]]] = {
-    val since = Instant.ofEpochMilli(seconds.seconds.toMillis)
-    wMemoSwapsPaginated(since)
-  }
-
-  def wMemoSwapsPaginated(
+  def pairSwapsPaginated(
+      pair: String,
       since: Instant,
       swapsAcc: mutable.ArrayBuffer[SwapDetails] = mutable.ArrayBuffer.empty,
       seen: mutable.HashSet[String] = mutable.HashSet.empty
   ): EventStream[Either[CalibanClientError, Seq[SwapDetails]]] = {
     val lastTimestamp = swapsAcc.lastOption.map(_.timestamp)
     val lastId        = swapsAcc.lastOption.map(_.id)
-    DEX.wMemoSwapsQuery(since, 0, lastTimestamp, lastId).toEventStream(URI).flatMap {
+    val swapRequest   = DEX.sushiPairSwapsQuery(pair, since, 0, lastTimestamp, lastId).toEventStream(SUSHI_SWAP_AVAX)
+    swapRequest.flatMap {
       case error @ Left(_)  =>
         EventStream.fromValue(error)
       case Right(nextSwaps) =>
@@ -40,10 +31,11 @@ object OrderbookVolume {
           EventStream.fromValue(Right(asVector))
         } else {
           nextSwaps.foreach(s => seen.add(s.id))
-          wMemoSwapsPaginated(since, swapsAcc ++ nextSwaps, seen)
+          pairSwapsPaginated(pair, since, swapsAcc ++ nextSwaps, seen)
         }
     }
   }
+
 //  def infoTask(msg: String): IO[Unit] = IO.delay(println(msg))
 //
 //  def findVolumeWMEMO(

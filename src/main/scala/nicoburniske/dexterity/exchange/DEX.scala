@@ -83,6 +83,14 @@ object DEX {
     Queries.pairSwapsSinceInstant(PairAddress.SUSHI_WMEMO_MIM, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
   }
 
+  def sushiPairSwapsQuery(pairAddress: String,
+                          since: Instant,
+                          minSwap: BigInt,
+                          lastTimestamp: Option[BigInt] = None,
+                          lastId: Option[String] = None): SelectionBuilder[RootQuery, Seq[SwapDetails]] = {
+    Queries.pairSwapsSinceInstant(pairAddress, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
+  }
+
   def wMemoSwapsRequest(
       since: Instant,
       minSwap: BigInt,
