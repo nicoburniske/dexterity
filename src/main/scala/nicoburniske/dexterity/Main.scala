@@ -2,98 +2,125 @@ package nicoburniske.dexterity
 
 import java.time.Instant
 
+import caliban.client.CalibanClientError
+import caliban.client.laminext._
+import com.raquo.laminar.api.L
 import com.raquo.laminar.api.L._
-import nicoburniske.dexterity.components.material.Slider
+import io.laminext.syntax.core._
+import io.laminext.websocket.WebSocket
+import nicoburniske.dexterity.components.material.{CircularProgress, Slider}
 import nicoburniske.dexterity.exchange.DEX.PairAddress
-import nicoburniske.dexterity.exchange.SwapDetails
-import nicoburniske.dexterity.task.OrderbookVolume
+import nicoburniske.dexterity.exchange.{DEX, SwapDetails}
 import org.scalajs.dom
 
-import scala.collection.mutable
 import scala.concurrent.duration._
 
 object Main {
-  val CONTAINER                  = "appContainer"
-  val TICK_INTERVAL              = 10.seconds
-  val MIN_HISTORY_INTERVAL_HOURS = 1.0
-  val MAX_HISTORY_INTERVAL_HOURS = 8.0
+  val CONTAINER                    = "appContainer"
+  val TICK_INTERVAL                = 10.seconds
+  val MIN_HISTORY_INTERVAL_HOURS   = 1.0
+  val MAX_HISTORY_INTERVAL_HOURS   = 8.0
+  val SUSHISWAP_SUBGRAPH_WEBSOCKET = "ws://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 
-  val $tick                         = EventStream.periodic(TICK_INTERVAL.toMillis.toInt)
-  val interval: Var[FiniteDuration] = Var(1.hours)
-  // val $updateSwaps = EventStream.merge($tick, intervalSignal.changes)
-
+  val interval    = Var(1.hours)
   val swaps       = Var(Seq.empty[SwapDetails])
   val pairAddress = Var(PairAddress.SUSHI_WMEMO_MIM)
 
-  /**
-   * Add new swaps since last tick. Removes swaps that are older than {Now - Interval}.
-   */
-  val swapUpdater: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
-    // TODO: ensure curr and next are of same pair.
-    val since        = Instant.now().toEpochMilli.millis - interval.now()
-    val removeTooOld = curr
-      .reverse
-      .dropWhile { swap =>
-        val stamp = swap.timestamp.longValue.seconds
-        stamp < since
-      }
-      .reverse
-    (next ++ removeTooOld).distinct
-  })
+  val websocket = WebSocket.url(SUSHISWAP_SUBGRAPH_WEBSOCKET, "graphql-ws").graphql.build()
 
-  /**
-   * TODO: see if can replace tick.resetTo with merged event stream.
-   *
-   * Reset all swaps and emit a tick event (force refresh of swaps).
-   */
-  def resetSwaps(): Unit = {
-    swaps.set(Seq.empty)
-    $tick.resetTo(0)
+  // TODO: Incorporate .changes here to prevent too many requests in websocket.
+  val $maybeSwaps: EventStream[Either[CalibanClientError, Seq[SwapDetails]]] =
+    websocket.isConnected.combineWith(swaps.signal).flatMap {
+      case (false, _)    => emptyStream
+      case (true, swaps) =>
+        val since = swaps
+          .headOption
+          .map(_.timestamp.toLong.seconds.toMillis)
+          .map(Instant.ofEpochMilli)
+          // Bulk-load history initially.
+          .getOrElse(Instant.now().minusSeconds(MAX_HISTORY_INTERVAL_HOURS.hours.toSeconds))
+        DEX
+          .Subscriptions
+          .pairSwapsSinceInstant(pairAddress.now(), since)(SwapDetails.DETAILS_MAPPED)
+          .toSubscription(websocket)
+          .received
+    }
+
+  def emptyStream[A]: EventStream[A] = {
+    EventStream.fromCustomSource[A](
+      shouldStart = _ => false,
+      start = (_, _, _, _) => (),
+      stop = _ => ()
+    )
   }
 
-  val newSwaps = $tick.map(_ => pairAddress.now() -> swaps.now())
-    .flatMap { case (pair, swaps) => findNewSwaps(pair, swaps) }
-    .filter(_.nonEmpty) // remove useless events to avoid recalculation.
+  val $newSwaps   = $maybeSwaps.collectRight
+  val $swapErrors = $maybeSwaps.collectLeft
 
-  def findNewSwaps(pairAddress: String, oldSwaps: Seq[SwapDetails]): EventStream[Seq[SwapDetails]] = {
-    val since = oldSwaps
-      .headOption
-      .map(_.timestamp.toLong.seconds.toMillis)
-      .map(Instant.ofEpochMilli)
-      .getOrElse(Instant.now().minusSeconds(interval.now().toSeconds))
-    val seen  = mutable.HashSet.from(oldSwaps.map(_.id))
-    OrderbookVolume.pairSwapsPaginated(pairAddress, since, seen = seen).map {
-      case Left(error)  =>
-        println(s"Failed to retrieve swaps ${error.getMessage()}")
-        Seq.empty
-      case Right(value) =>
-        println(s"${value.size} swaps found")
-        value
+  val $swapsWithinInterval = swaps.signal.combineWith(interval.signal).map {
+    case (allSwaps, interval) =>
+      val since     = Instant.now().toEpochMilli.millis - interval
+      val asSeconds = since.toSeconds
+      allSwaps.takeWhile(_.timestamp > asSeconds)
+  }
+
+  /**
+   * Add new swaps since last tick.
+   */
+  val swapUpdater: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
+    // TODO: ensure curr and next are of same pair
+    // TODO: remove transactions older than max duration?
+    val oldest        = (Instant.now().toEpochMilli.millis - MAX_HISTORY_INTERVAL_HOURS.hours).toSeconds
+    val removedTooOld = curr.reverse.dropWhile { swap => swap.timestamp < oldest }.reverse
+    val nextSorted    = next.sortWith(_.timestamp > _.timestamp)
+    (nextSorted ++ removedTooOld).distinctBy(_.id)
+  })
+
+  val contentOrLoading = $swapsWithinInterval.map { swaps =>
+    if (swaps.isEmpty) {
+      div(
+        "Fetching History",
+        CircularProgress().amend(
+          CircularProgress.`indeterminate` := true
+        ),
+        cls := "center"
+      )
+    } else {
+      content
     }
   }
 
-  val app = div(
+  val sliderContent = div(
+    L.span(child.text <-- interval.signal.map(interval => s"Volume Window = ${interval.toHours} hour(s)"), cls := "label"),
+    L.span(
+      Slider(
+        _.pin   := true,
+        _.min   := MIN_HISTORY_INTERVAL_HOURS,
+        _.max   := MAX_HISTORY_INTERVAL_HOURS,
+        _.step  := 0.5,
+        _.value := 1,
+        _.pin   := true,
+        slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
+      ).amend(
+        Slider.styles.themeSecondary := "rebeccapurple",
+        width                        := "50%"
+      )),
+    cls := "sliderContent"
+  )
+  val content       = div(
+    SwapStats($swapsWithinInterval),
+    sliderContent,
+    SwapTable($swapsWithinInterval),
+    cls := "content"
+  )
+  val app           = div(
     // EFFECTS.
-    newSwaps --> swapUpdater,
-    interval.signal.changes --> (_ => resetSwaps()),
+    websocket.connect,
+    websocket.connected --> (_ => websocket.init()),
+    $swapErrors --> (error => println(s"${error.getMessage()}")),
+    $newSwaps --> swapUpdater,
     // CONTENT.
-    h4("Tick #: ", child.text <-- $tick.map(_.toString)),
-    SwapStats(swaps.signal),
-    Slider(
-      _.pin   := true,
-      _.min   := MIN_HISTORY_INTERVAL_HOURS,
-      _.max   := MAX_HISTORY_INTERVAL_HOURS,
-      _.step  := 0.5,
-      _.value := 1,
-      _.pin   := true,
-      slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
-    ).amend(
-      Slider.styles.themeSecondary := "rebeccapurple",
-      width                        := "50%"
-    ),
-    SwapTable(swaps.signal),
-    // STYLING.
-    cls := "app"
+    child <-- contentOrLoading
   )
 
   def main(args: Array[String]): Unit = {

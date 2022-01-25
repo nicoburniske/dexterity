@@ -8,7 +8,6 @@ import nicoburniske.dexterity.exchange.{DEX, SwapDetails}
 
 import scala.collection.mutable
 
-// TODO: convert pagination to websocket?
 object OrderbookVolume {
   val SUSHI_SWAP_AVAX = "https://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 

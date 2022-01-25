@@ -36,6 +36,13 @@ object SwapStats {
           round((ratio / 2) + 0.5)
         }
     }
+
+    val volumeRatioAsPercent = volumeRatio
+      .map(_.setScale(2, RoundingMode.HALF_UP))
+      .map(_ * 10)
+      .map(_.toString)
+      .map("Buy/Sell pressure " + _)
+
     val priceSignal = swaps.map(_.headOption).map {
       case Some(value) => SwapDetails.roundAndFormat(value.realPrice)
       case None        => ""
@@ -47,24 +54,31 @@ object SwapStats {
     }
 
     val tableStats = Seq(
-      h4("Total Swaps: ", child.text <-- swapCount),
-      h4("Total Volume: ", child.text <-- totalVolume),
-      h4("Total sell volume: ", child.text <-- sellVolume),
-      h4("Total buy volume: ", child.text <-- buyVolume),
-      h4("Current price: ", child.text <-- priceSignal),
-      h4("Num sells: ", child.text <-- sells),
-      h4("Num buys: ", child.text <-- buys),
-      h4(child <-- volumeRatio.map(_.toString))
+      h4(child.text <-- swapCount.map("Total Swaps: " + _)),
+      h4(child.text <-- totalVolume.map("Total Volume: " + _)),
+      h4(child.text <-- sellVolume.map("Total sell volume: " + _)),
+      h4(child.text <-- buyVolume.map("Total buy volume: " + _)),
+      h4(child.text <-- priceSignal.map("Current price: " + _)),
+      h4(child.text <-- sells.map("Num sells: " + _)),
+      h4(child.text <-- buys.map("Num buys: " + _))
     ).map(_.amend(cls := "stat"))
 
+    val progressBar = LinearProgressBar(
+      _.progress <-- volumeRatio.map(_.toDouble)
+    ).amend(
+      LinearProgressBar.styles.themePrimary              := "green",
+      LinearProgressBar.styles.linearProgressBufferColor := "red"
+    )
+
     div(
-      h2(child.text <-- poolNameSignal, cls                := "pairHeader"),
-      tableStats,
-      LinearProgressBar(
-        _.progress <-- volumeRatio.map(_.toDouble)
-      ).amend(
-        LinearProgressBar.styles.themePrimary              := "green",
-        LinearProgressBar.styles.linearProgressBufferColor := "red"
+      h2(child.text <-- poolNameSignal, cls := "pairHeader"),
+      div(tableStats, display.flex, flexDirection.column, justifyContent.center),
+      div(
+        h4(child.text <-- volumeRatioAsPercent, cls := "stat"),
+        progressBar,
+        display.flex,
+        flexDirection.column,
+        justifyContent.center
       )
     )
   }
