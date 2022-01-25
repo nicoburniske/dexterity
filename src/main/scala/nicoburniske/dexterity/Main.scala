@@ -20,7 +20,7 @@ object Main {
   val TICK_INTERVAL                = 10.seconds
   val MIN_HISTORY_INTERVAL_HOURS   = 1.0
   val MAX_HISTORY_INTERVAL_HOURS   = 8.0
-  val SUSHISWAP_SUBGRAPH_WEBSOCKET = "ws://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
+  val SUSHISWAP_SUBGRAPH_WEBSOCKET = "wss://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 
   val interval    = Var(1.hours)
   val swaps       = Var(Seq.empty[SwapDetails])

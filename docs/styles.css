@@ -1,0 +1,112 @@
+@font-face {
+    font-family: Ubuntu;
+    font-weight: bold;
+    src: url("Ubuntu-Bold.ttf");
+}
+
+@font-face {
+    font-family: Ubuntu;
+    font-weight: normal;
+    src: url("Ubuntu-Regular.ttf");
+}
+
+body {
+    background-color: #111;
+}
+
+.content {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.sliderContent {
+    flex-direction: row;
+    align-items: center;
+}
+
+.label {
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    font-size: 20px;
+    color: white;
+}
+
+.center {
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    font-size: 20px;
+    color: white;
+
+    width: 200px;
+    height: 200px;
+    /* Center vertically and horizontally */
+    position: absolute;
+    top: 45%;
+    left: 45%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+
+.stat {
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    font-size: 20px;
+    color: white;
+    display: inline-block;
+    width: 35%;
+    flex: none;
+}
+
+.pairHeader {
+    font-family: Ubuntu, serif;
+    font-weight: bold;
+    font-size: 40px;
+    color: white;
+}
+
+.tableHeader {
+    color: white;
+    background-color: rebeccapurple;
+    border: 1px solid rebeccapurple;
+}
+
+.tableRow {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    font-size: 20px;
+    font-family: Ubuntu, serif;
+    font-weight: normal;
+    padding: 0;
+    margin: 0;
+}
+
+.tableRow > li {
+    display: table-cell;
+    text-align: center;
+}
+
+.isSell {
+    color: black;
+    background-color: lightcoral;
+    border: 1px solid red;
+}
+
+.isSell > li > strong {
+    color: darkred;
+}
+
+.isBuy {
+    color: black;
+    background-color: lightgreen;
+    border: 1px solid green;
+}
+
+.isBuy > li > strong {
+    color: darkgreen;
+}
+
