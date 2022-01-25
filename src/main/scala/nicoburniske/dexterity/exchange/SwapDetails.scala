@@ -37,7 +37,7 @@ object SwapDetails {
    */
   def roundAndFormat(d: BigDecimal): String = {
     val s = FORMATTER.format(round(d).toDouble)
-    "$" + { s.substring(1, s.length) }
+    "$" + s.substring(1, s.length)
   }
 }
 
@@ -68,17 +68,17 @@ case class SwapDetails(
   val realId        = id.split("-").head
   val snowtraceLink = s"https://snowtrace.io/tx/$realId"
 
-  val timeFormatted = {
+  val timeFormatted     = {
     val instant = new js.Date(timestamp.toLong.seconds.toMillis)
     instant.toLocaleTimeString()
   }
 
-  val token0traded  = {
+  val token0traded = {
     val traded = if (token0Received == 0) token0Sold else token0Received
     traded.setScale(3, RoundingMode.HALF_UP)
   }
 
-  val token1traded  = {
+  val token1traded = {
     val traded = if (token1Received == 0) token1Sold else token1Received
     traded.setScale(3, RoundingMode.HALF_UP)
   }

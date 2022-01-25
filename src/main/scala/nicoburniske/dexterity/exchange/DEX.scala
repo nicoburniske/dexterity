@@ -3,12 +3,11 @@ package nicoburniske.dexterity.exchange
 import java.time.Instant
 
 import caliban.client.FieldBuilder.{ListOf, Obj, OptionOf}
-import caliban.client.Operations.RootQuery
+import caliban.client.Operations.{RootQuery, RootSubscription}
 import caliban.client.SelectionBuilder.Field
 import caliban.client.__Value.__ObjectValue
-import caliban.client.{ArgEncoder, Argument, CalibanClientError, SelectionBuilder}
+import caliban.client.{ArgEncoder, Argument, SelectionBuilder}
 import generated.sushi.exchange.{Pair, Swap}
-import sttp.client3.{Request, _}
 
 import scala.concurrent.duration._
 import scala.math.BigDecimal.RoundingMode
@@ -19,11 +18,6 @@ import scala.math.BigDecimal.RoundingMode
 object DEX {
   implicit def encodeMap[V](implicit encodeVal: ArgEncoder[V]): ArgEncoder[Seq[(String, V)]] = (seq: Seq[(String, V)]) =>
     __ObjectValue(seq.toList.map { case (key, value) => key -> encodeVal.encode(value) })
-
-  object Endpoints {
-    val TRADER_JOE = uri"https://api.thegraph.com/subgraphs/name/token-terminal/trader-joe-v1-avalanche"
-    val SUSHISWAP  = uri"https://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
-  }
 
   object PairAddress {
     val TJ_TIME_MIM     = "0x113f413371fc4cc4c9d6416cf1de9dfd7bf747df"
@@ -45,7 +39,8 @@ object DEX {
         instant: Instant,
         minTradeAmount: BigInt = BigInt(0),
         lastTimestamp: Option[BigInt] = None,
-        lastId: Option[String] = None)(swapSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootQuery, Seq[A]] = {
+        lastId: Option[String] = None,
+        sortAscending: Boolean = false)(swapSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootQuery, Seq[A]] = {
       val instantToSec   = BigInt(instant.toEpochMilli.millis.toSeconds)
       val maybeTimestamp = lastTimestamp.map(_.toString).map("timestamp_lte" -> _)
       val maybeId        = lastId.map("id_not" -> _)
@@ -57,7 +52,8 @@ object DEX {
       ).flatten
       val filterArg      = Argument("where", conditions, "")
       val orderByArg     = Argument("orderBy", "timestamp", "")
-      val sortDirection  = Argument("orderDirection", "desc", "")
+      val direction      = if (sortAscending) "asc" else "desc"
+      val sortDirection  = Argument("orderDirection", direction, "")
       val swapsField     = Field[Pair, List[A]](
         "swaps",
         ListOf(Obj(swapSelection)),
@@ -67,28 +63,34 @@ object DEX {
     }
   }
 
+  // TODO: Ensure casting is safe.
+  object Subscriptions {
+    def pairSwaps[A](pairId: String)(innerSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootSubscription, Seq[A]] =
+      Queries.pairSwaps(pairId)(innerSelection).asInstanceOf[SelectionBuilder[RootSubscription, Seq[A]]]
+
+    def pairSwapsSinceInstant[A](
+        pairId: String,
+        instant: Instant,
+        minTradeAmount: BigInt = BigInt(0),
+        lastTimestamp: Option[BigInt] = None,
+        lastId: Option[String] = None)(swapSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootSubscription, Seq[A]] = {
+      Queries
+        .pairSwapsSinceInstant(pairId, instant, minTradeAmount, lastTimestamp, lastId, sortAscending = true)(swapSelection)
+        .asInstanceOf[SelectionBuilder[RootSubscription, Seq[A]]]
+    }
+  }
+
   def queryPriceWMEMO(): SelectionBuilder[RootQuery, Option[(String, BigDecimal)]] = {
     Queries.pairData(PairAddress.SUSHI_WMEMO_MIM)(Pair.name ~ Pair.token1Price)
   }
 
-  def priceWMEMO(): Request[Either[CalibanClientError, Option[(String, BigDecimal)]], Any] = {
-    queryPriceWMEMO().toRequest(Endpoints.SUSHISWAP).mapResponseRight(round)
-  }
-
-  def wMemoSwapsQuery(
+  def sushiPairSwapsQuery(
+      pairAddress: String,
       since: Instant,
       minSwap: BigInt,
       lastTimestamp: Option[BigInt] = None,
       lastId: Option[String] = None): SelectionBuilder[RootQuery, Seq[SwapDetails]] = {
-    Queries.pairSwapsSinceInstant(PairAddress.SUSHI_WMEMO_MIM, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
-  }
-
-  def wMemoSwapsRequest(
-      since: Instant,
-      minSwap: BigInt,
-      lastTimestamp: Option[BigInt] = None,
-      lastId: Option[String] = None): Request[Either[CalibanClientError, Seq[SwapDetails]], Any] = {
-    wMemoSwapsQuery(since, minSwap, lastTimestamp, lastId).toRequest(Endpoints.SUSHISWAP)
+    Queries.pairSwapsSinceInstant(pairAddress, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
   }
 
   private def round(res: Option[(String, BigDecimal)]): Option[(String, BigDecimal)] = {
