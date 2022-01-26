@@ -22,29 +22,27 @@ object Main {
   val MAX_HISTORY_INTERVAL_HOURS = 8.0
   val SUSHISWAP_SUBGRAPH         = "wss://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 
+  val websocket = WebSocket.url(SUSHISWAP_SUBGRAPH, "graphql-ws").graphql.build()
+
   val interval    = Var(1.hours)
   val minSwap     = Var(BigDecimal(10000))
   val swaps       = Var(Seq.empty[SwapDetails])
   val pairAddress = Var(PairAddress.SUSHI_WMEMO_MIM)
 
-  val websocket = WebSocket.url(SUSHISWAP_SUBGRAPH, "graphql-ws").graphql.build()
+  val minSwapWriter     = minSwap.writer
+  val pairAddressWriter = pairAddress.writer
 
-  // TODO: Incorporate .changes here to prevent too many requests in websocket.
   val $maybeSwaps: EventStream[Either[CalibanClientError, Seq[SwapDetails]]] =
-    websocket.isConnected.combineWith(swaps.signal).flatMap {
-      case (false, _)    => emptyStream
-      case (true, swaps) =>
+    websocket.isConnected.combineWith(swaps.signal, pairAddress.signal).flatMap {
+      case (false, _, _)       => emptyStream
+      case (true, swaps, pair) =>
         val since = swaps
           .headOption
           .map(_.timestamp.toLong.seconds.toMillis)
           .map(Instant.ofEpochMilli)
           // Bulk-load history initially.
           .getOrElse(Instant.now().minusSeconds(MAX_HISTORY_INTERVAL_HOURS.hours.toSeconds))
-        DEX
-          .Subscriptions
-          .pairSwapsSinceInstant(pairAddress.now(), since)(SwapDetails.DETAILS_MAPPED)
-          .toSubscription(websocket)
-          .received
+        DEX.Subscriptions.pairSwapsSinceInstant(pair, since)(SwapDetails.DETAILS_MAPPED).toSubscription(websocket).received
     }
 
   /**
@@ -59,8 +57,6 @@ object Main {
     (nextSorted ++ removedTooOld).distinctBy(_.id)
   })
 
-  val minSwapWriter = minSwap.writer
-
   def emptyStream[A]: EventStream[A] = {
     EventStream.fromCustomSource[A](
       shouldStart = _ => false,
@@ -68,9 +64,6 @@ object Main {
       stop = _ => ()
     )
   }
-
-  val $newSwaps   = $maybeSwaps.collectRight
-  val $swapErrors = $maybeSwaps.collectLeft
 
   val $swapsWithinInterval = swaps.signal.combineWith(interval.signal).map {
     case (allSwaps, interval) =>
@@ -87,7 +80,7 @@ object Main {
   val contentOrLoading = $swapsWithinInterval.map { swaps =>
     if (swaps.isEmpty) {
       div(
-        "Fetching History",
+        "Retrieving Swaps",
         CircularProgress().amend(
           CircularProgress.`indeterminate` := true
         ),
@@ -111,6 +104,7 @@ object Main {
         slider => inContext { thisNode => slider.onChange.mapTo(thisNode.ref.value.hours) --> interval }
       ).amend(
         Slider.styles.themeSecondary := "rebeccapurple",
+        Slider.styles.sliderBgColorBehindComponent := "grey",
         width                        := "50%"
       )),
     cls := "sliderContent"
@@ -119,28 +113,48 @@ object Main {
   val minTransaction = div(
     "Min swap size: ",
     input(
+      typ := "text",
       placeholder <-- minSwap.signal.map(min => s"Min swap amount USD: $min"),
       controlled(
         value <-- minSwap.signal.map(_.toString),
         onInput.mapToValue.map(_.filter(Character.isDigit)).map(BigDecimal(_)) --> minSwapWriter
-      )
+      ),
+      cls := "inputBox"
     ),
+    cls := "label"
+  )
+
+  val pairAddressInput = input(
+    typ := "text",
+    value <-- pairAddress,
+    cls := "inputBox"
+  )
+
+  val inputPair = div(
+    "Pair Address: ",
+    pairAddressInput,
+    button("Change Pair", onClick.mapTo(pairAddressInput.ref.value.toLowerCase) --> pairAddressWriter, cls := "button"),
     cls := "label"
   )
 
   val content = div(
     SwapStats($swapsWithinInterval),
     minTransaction,
+    inputPair,
     sliderContent,
     children <-- SwapTable($swapsGreaterThanMin.map(_.take(TABLE_MAX)).changes),
     cls := "content"
   )
-  val app     = div(
+
+  val app = div(
     // EFFECTS.
     websocket.connect,
     websocket.connected --> (_ => websocket.init()),
-    $swapErrors --> (error => println(s"${error.getMessage()}")),
-    $newSwaps --> swapUpdater,
+
+    $maybeSwaps.collectLeft --> (error => println(s"${error.getMessage()}")),
+    $maybeSwaps.collectRight --> swapUpdater,
+
+    pairAddress.signal.changes --> (_ => swaps.set(Seq.empty)),
     // CONTENT.
     child <-- contentOrLoading
   )

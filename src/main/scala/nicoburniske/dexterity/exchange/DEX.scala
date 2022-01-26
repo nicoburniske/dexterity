@@ -20,8 +20,8 @@ object DEX {
     __ObjectValue(seq.toList.map { case (key, value) => key -> encodeVal.encode(value) })
 
   object PairAddress {
-    val TJ_TIME_MIM     = "0x113f413371fc4cc4c9d6416cf1de9dfd7bf747df"
     val SUSHI_WMEMO_MIM = "0x4d308c46ea9f234ea515cc51f16fba776451cac8"
+    val SUSHI_WAVAX_MIM = "0xcbb424fd93cdec0ef330d8a8c985e8b147f62339"
   }
 
   /**

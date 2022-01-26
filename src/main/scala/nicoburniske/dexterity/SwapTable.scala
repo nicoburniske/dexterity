@@ -1,6 +1,5 @@
 package nicoburniske.dexterity
 
-import com.raquo.airstream.core.Signal
 import com.raquo.laminar.api.L._
 import nicoburniske.dexterity.exchange.SwapDetails
 
@@ -8,7 +7,7 @@ object SwapTable {
 
   def apply(swaps: EventStream[Seq[SwapDetails]]): EventStream[Seq[HtmlElement]] = {
     for {
-      rows <- swaps.split(_.id)(renderSwapAsRow)
+      rows    <- swaps.split(_.id)(renderSwapAsRow)
       headers <- swaps.map(renderHeaders)
     } yield headers +: rows
   }
@@ -29,8 +28,8 @@ object SwapTable {
   }
 
   def renderHeaders(swaps: Seq[SwapDetails]): HtmlElement = {
-    val token0   = swaps.headOption.map(_.token0).map(_ + " swapped").getOrElse("Token0")
-    val token1   = swaps.headOption.map(_.token1).map(_ + " swapped").getOrElse("Token1")
+    val token0 = swaps.headOption.map(_.token0).map(_ + " swapped").getOrElse("Token0")
+    val token1 = swaps.headOption.map(_.token1).map(_ + " swapped").getOrElse("Token1")
 
     ol(
       li("Type"),
