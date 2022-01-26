@@ -31,8 +31,11 @@ object DEX {
     def pairData[A](pairId: String)(innerSelection: SelectionBuilder[Pair, A]): SelectionBuilder[RootQuery, Option[A]] =
       Field("pair", OptionOf(Obj(innerSelection)), arguments = List(Argument("id", pairId, "String!")))
 
-    def pairSwaps[A](pairId: String)(innerSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootQuery, Seq[A]] =
-      Field("pair", Obj(Pair.swaps(innerSelection)), arguments = List(Argument("id", pairId, "String!")))
+    def pairs[A](innerSelection: SelectionBuilder[Pair,A]): SelectionBuilder[RootQuery, Seq[A]] = {
+      val orderBy = Argument("orderBy", "volumeUSD", "")
+      val sortDirection = Argument("orderDirection", "desc", "")
+      Field("pairs", ListOf(Obj(innerSelection)), arguments = List(orderBy, sortDirection))
+    }
 
     def pairSwapsSinceInstant[A](
         pairId: String,
@@ -65,8 +68,6 @@ object DEX {
 
   // TODO: Ensure casting is safe.
   object Subscriptions {
-    def pairSwaps[A](pairId: String)(innerSelection: SelectionBuilder[Swap, A]): SelectionBuilder[RootSubscription, Seq[A]] =
-      Queries.pairSwaps(pairId)(innerSelection).asInstanceOf[SelectionBuilder[RootSubscription, Seq[A]]]
 
     def pairSwapsSinceInstant[A](
         pairId: String,
@@ -89,8 +90,8 @@ object DEX {
       since: Instant,
       minSwap: BigInt,
       lastTimestamp: Option[BigInt] = None,
-      lastId: Option[String] = None): SelectionBuilder[RootQuery, Seq[SwapDetails]] = {
-    Queries.pairSwapsSinceInstant(pairAddress, since, minSwap, lastTimestamp, lastId)(SwapDetails.DETAILS_MAPPED)
+      lastId: Option[String] = None): SelectionBuilder[RootQuery, Seq[SwapDetail]] = {
+    Queries.pairSwapsSinceInstant(pairAddress, since, minSwap, lastTimestamp, lastId)(SwapDetail.DETAILS_MAPPED)
   }
 
   private def round(res: Option[(String, BigDecimal)]): Option[(String, BigDecimal)] = {

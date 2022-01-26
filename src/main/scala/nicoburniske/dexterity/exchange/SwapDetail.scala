@@ -6,7 +6,7 @@ import scala.concurrent.duration._
 import scala.math.BigDecimal.RoundingMode
 import scala.scalajs.js
 
-object SwapDetails {
+object SwapDetail {
   val SELECTION_BUILDER =
     Swap.pair(Pair.name) ~
       Swap.pair(Pair.token0Price) ~
@@ -22,7 +22,7 @@ object SwapDetails {
       Swap.amount1Out ~
       Swap.to
 
-  val DETAILS_MAPPED = SELECTION_BUILDER.mapN(SwapDetails.apply _)
+  val DETAILS_MAPPED = SELECTION_BUILDER.mapN(SwapDetail.apply _)
   val FORMATTER      = java.text.NumberFormat.getCurrencyInstance
 
   def round(d: BigDecimal, scale: Int = 2): BigDecimal = {
@@ -42,7 +42,7 @@ object SwapDetails {
   }
 }
 
-case class SwapDetails(
+case class SwapDetail(
     pair: String,
     price0: BigDecimal,
     price1: BigDecimal,

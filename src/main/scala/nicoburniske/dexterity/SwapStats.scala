@@ -3,7 +3,7 @@ package nicoburniske.dexterity
 import com.raquo.airstream.core.Signal
 import com.raquo.laminar.api.L._
 import nicoburniske.dexterity.components.material.LinearProgressBar
-import nicoburniske.dexterity.exchange.SwapDetails
+import nicoburniske.dexterity.exchange.SwapDetail
 
 import scala.math.BigDecimal
 import scala.math.BigDecimal.RoundingMode
@@ -11,16 +11,16 @@ import scala.math.BigDecimal.RoundingMode
 object SwapStats {
   def round(b: BigDecimal): BigDecimal = b.setScale(3, RoundingMode.HALF_UP)
 
-  def apply(swaps: Signal[Seq[SwapDetails]]): HtmlElement = {
+  def apply(swaps: Signal[Seq[SwapDetail]]): HtmlElement = {
 
     val sellsAndBuys = swaps.signal.map { swaps =>
       val grouped = swaps.groupMapReduce(_.isBuy)(_.amountUSD)(_ + _)
       (grouped.getOrElse(false, BigDecimal(0)), grouped.getOrElse(true, BigDecimal(0)))
     }
 
-    val sellVolume  = sellsAndBuys.map(_._1).map(SwapDetails.roundAndFormat)
-    val buyVolume   = sellsAndBuys.map(_._2).map(SwapDetails.roundAndFormat)
-    val totalVolume = sellsAndBuys.map { case (s, b) => s + b }.map(SwapDetails.roundAndFormat)
+    val sellVolume  = sellsAndBuys.map(_._1).map(SwapDetail.roundAndFormat)
+    val buyVolume   = sellsAndBuys.map(_._2).map(SwapDetail.roundAndFormat)
+    val totalVolume = sellsAndBuys.map { case (s, b) => s + b }.map(SwapDetail.roundAndFormat)
 
     val sells     = swaps.signal.map(swaps => swaps.count(!_.isBuy))
     val buys      = swaps.signal.map(swaps => swaps.count(_.isBuy))
@@ -44,7 +44,7 @@ object SwapStats {
       .map("Buy/Sell pressure " + _)
 
     val priceSignal = swaps.map(_.headOption).map {
-      case Some(value) => SwapDetails.roundAndFormat(value.realPrice)
+      case Some(value) => SwapDetail.roundAndFormat(value.realPrice)
       case None        => ""
     }
 
