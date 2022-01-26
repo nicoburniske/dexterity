@@ -19,7 +19,8 @@ object SwapDetails {
       Swap.amount0In ~
       Swap.amount0Out ~
       Swap.amount1In ~
-      Swap.amount1Out
+      Swap.amount1Out ~
+      Swap.sender
 
   val DETAILS_MAPPED = SELECTION_BUILDER.mapN(SwapDetails.apply _)
   val FORMATTER      = java.text.NumberFormat.getCurrencyInstance
@@ -53,7 +54,8 @@ case class SwapDetails(
     token0Sold: BigDecimal,
     token0Received: BigDecimal,
     token1Sold: BigDecimal,
-    token1Received: BigDecimal) {
+    token1Received: BigDecimal,
+    sender: String) {
 
   val (token0, token1) = {
     val split = pair.split("-")
@@ -67,6 +69,7 @@ case class SwapDetails(
   // TODO: why is there a dash? Deserialization perhaps?
   val realId        = id.split("-").head
   val snowtraceLink = s"https://snowtrace.io/tx/$realId"
+  val debankLink = s"https://debank.com/profile/$sender"
 
   val timeFormatted     = {
     val instant = new js.Date(timestamp.toLong.seconds.toMillis)

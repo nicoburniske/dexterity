@@ -16,17 +16,18 @@ import org.scalajs.dom
 import scala.concurrent.duration._
 
 object Main {
-  val CONTAINER                    = "appContainer"
-  val TICK_INTERVAL                = 10.seconds
-  val MIN_HISTORY_INTERVAL_HOURS   = 1.0
-  val MAX_HISTORY_INTERVAL_HOURS   = 8.0
-  val SUSHISWAP_SUBGRAPH_WEBSOCKET = "wss://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
+  val CONTAINER                  = "appContainer"
+  val TABLE_MAX                  = 1000
+  val MIN_HISTORY_INTERVAL_HOURS = 1.0
+  val MAX_HISTORY_INTERVAL_HOURS = 8.0
+  val SUSHISWAP_SUBGRAPH         = "wss://api.thegraph.com/subgraphs/name/sushiswap/avalanche-exchange"
 
   val interval    = Var(1.hours)
+  val minSwap     = Var(BigDecimal(10000))
   val swaps       = Var(Seq.empty[SwapDetails])
   val pairAddress = Var(PairAddress.SUSHI_WMEMO_MIM)
 
-  val websocket = WebSocket.url(SUSHISWAP_SUBGRAPH_WEBSOCKET, "graphql-ws").graphql.build()
+  val websocket = WebSocket.url(SUSHISWAP_SUBGRAPH, "graphql-ws").graphql.build()
 
   // TODO: Incorporate .changes here to prevent too many requests in websocket.
   val $maybeSwaps: EventStream[Either[CalibanClientError, Seq[SwapDetails]]] =
@@ -46,6 +47,20 @@ object Main {
           .received
     }
 
+  /**
+   * Add new swaps since last tick.
+   */
+  val swapUpdater: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
+    // TODO: ensure curr and next are of same pair
+    // TODO: remove transactions older than max duration?
+    val oldest        = (Instant.now().toEpochMilli.millis - MAX_HISTORY_INTERVAL_HOURS.hours).toSeconds
+    val removedTooOld = curr.reverse.dropWhile { swap => swap.timestamp < oldest }.reverse
+    val nextSorted    = next.sortWith(_.timestamp > _.timestamp)
+    (nextSorted ++ removedTooOld).distinctBy(_.id)
+  })
+
+  val minSwapWriter = minSwap.writer
+
   def emptyStream[A]: EventStream[A] = {
     EventStream.fromCustomSource[A](
       shouldStart = _ => false,
@@ -64,17 +79,10 @@ object Main {
       allSwaps.takeWhile(_.timestamp > asSeconds)
   }
 
-  /**
-   * Add new swaps since last tick.
-   */
-  val swapUpdater: Observer[Seq[SwapDetails]] = swaps.updater((curr, next) => {
-    // TODO: ensure curr and next are of same pair
-    // TODO: remove transactions older than max duration?
-    val oldest        = (Instant.now().toEpochMilli.millis - MAX_HISTORY_INTERVAL_HOURS.hours).toSeconds
-    val removedTooOld = curr.reverse.dropWhile { swap => swap.timestamp < oldest }.reverse
-    val nextSorted    = next.sortWith(_.timestamp > _.timestamp)
-    (nextSorted ++ removedTooOld).distinctBy(_.id)
-  })
+  val $swapsGreaterThanMin = $swapsWithinInterval.combineWith(minSwap.signal).map {
+    case (swaps, min) =>
+      swaps.filter { swap => swap.amountUSD.compare(min) >= 0 }
+  }
 
   val contentOrLoading = $swapsWithinInterval.map { swaps =>
     if (swaps.isEmpty) {
@@ -107,10 +115,20 @@ object Main {
       )),
     cls := "sliderContent"
   )
+
+  val minTransaction = input(
+    placeholder <-- minSwap.signal.map( min => s"Min swap amount USD: $min"),
+    controlled(
+      value <-- minSwap.signal.map(_.toString),
+      onInput.mapToValue.map(_.filter(Character.isDigit)).map(BigDecimal(_)) --> minSwapWriter
+    )
+  )
+
   val content       = div(
     SwapStats($swapsWithinInterval),
+    minTransaction,
     sliderContent,
-    SwapTable($swapsWithinInterval),
+    SwapTable($swapsGreaterThanMin.map(_.take(TABLE_MAX))),
     cls := "content"
   )
   val app           = div(
