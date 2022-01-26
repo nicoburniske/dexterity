@@ -116,22 +116,26 @@ object Main {
     cls := "sliderContent"
   )
 
-  val minTransaction = input(
-    placeholder <-- minSwap.signal.map( min => s"Min swap amount USD: $min"),
-    controlled(
-      value <-- minSwap.signal.map(_.toString),
-      onInput.mapToValue.map(_.filter(Character.isDigit)).map(BigDecimal(_)) --> minSwapWriter
-    )
+  val minTransaction = div(
+    "Min swap size: ",
+    input(
+      placeholder <-- minSwap.signal.map(min => s"Min swap amount USD: $min"),
+      controlled(
+        value <-- minSwap.signal.map(_.toString),
+        onInput.mapToValue.map(_.filter(Character.isDigit)).map(BigDecimal(_)) --> minSwapWriter
+      )
+    ),
+    cls := "label"
   )
 
-  val content       = div(
+  val content = div(
     SwapStats($swapsWithinInterval),
     minTransaction,
     sliderContent,
-    SwapTable($swapsGreaterThanMin.map(_.take(TABLE_MAX))),
+    children <-- SwapTable($swapsGreaterThanMin.map(_.take(TABLE_MAX)).changes),
     cls := "content"
   )
-  val app           = div(
+  val app     = div(
     // EFFECTS.
     websocket.connect,
     websocket.connected --> (_ => websocket.init()),

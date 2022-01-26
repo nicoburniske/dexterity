@@ -20,7 +20,7 @@ object SwapDetails {
       Swap.amount0Out ~
       Swap.amount1In ~
       Swap.amount1Out ~
-      Swap.sender
+      Swap.to
 
   val DETAILS_MAPPED = SELECTION_BUILDER.mapN(SwapDetails.apply _)
   val FORMATTER      = java.text.NumberFormat.getCurrencyInstance
