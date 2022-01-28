@@ -1,6 +1,7 @@
 package nicoburniske.dexterity.exchange
 
 object Subgraph {
+  val ALL = Seq(Arbitrum, Avax, Bsc, Celo, Ethereum, Fantom, Matic, XDai)
 
   sealed trait Endpoint {
     def url: String
@@ -40,4 +41,9 @@ object Subgraph {
   object XDai extends Endpoint {
     val url = "api.thegraph.com/subgraphs/name/sushiswap/xdai-exchange"
   }
+
+  // TODO: Implement compatibility with Uniswap subgraph.
+//  object Uniswap extends Endpoint {
+//    val url = "api.thegraph.com/subgraphs/name/ianlapham/uniswap-v3-subgraph"
+//  }
 }

@@ -25,7 +25,7 @@ object DexPage {
 }
 
 case class DexPage(dexEndpoint: Endpoint) {
-  import DexPage.{MAX_HISTORY_INTERVAL_HOURS, MIN_HISTORY_INTERVAL_HOURS, TABLE_MAX}
+  import DexPage._
   val websocket = WebSocket.url(dexEndpoint.wss, "graphql-ws").graphql.build()
 
   val interval     = Var(1.hours)
@@ -54,7 +54,7 @@ case class DexPage(dexEndpoint: Endpoint) {
     case (false, _, _)       => emptyStream
     case (true, "", _)       => emptyStream
     case (true, pair, swaps) =>
-      val since                                                      = swaps
+      val since = swaps
         .headOption
         .map(_.timestamp.toLong.seconds.toMillis)
         .map(Instant.ofEpochMilli)
@@ -62,6 +62,7 @@ case class DexPage(dexEndpoint: Endpoint) {
         .getOrElse(Instant.now().minusSeconds(MAX_HISTORY_INTERVAL_HOURS.hours.toSeconds))
       val query: SelectionBuilder[RootSubscription, Seq[SwapDetail]] =
         DEX.Subscriptions.pairSwapsSinceInstant(pair, since)(SwapDetail.DETAILS_MAPPED)
+      // TODO: inquire about unsubscribing?
       query.toSubscription(websocket).received
   }
 
@@ -89,9 +90,7 @@ case class DexPage(dexEndpoint: Endpoint) {
     if (swaps.isEmpty) {
       div(
         "Retrieving Swaps",
-        CircularProgress().amend(
-          CircularProgress.`indeterminate` := true
-        ),
+        CircularProgress().amend(CircularProgress.`indeterminate` := true),
         cls := "center"
       )
     } else {
@@ -125,7 +124,10 @@ case class DexPage(dexEndpoint: Endpoint) {
       placeholder <-- minSwap.signal.map(min => s"Min swap amount USD: $min"),
       controlled(
         value <-- minSwap.signal.map(_.toString),
-        onInput.mapToValue.map(_.filter(Character.isDigit)).map(BigDecimal(_)) --> minSwap
+        onInput.mapToValue.map(_.filter(Character.isDigit)).map {
+          case ""    => BigDecimal(0) // Case to handle no input
+          case other => BigDecimal(other)
+        } --> minSwap
       ),
       cls := "inputBox"
     ),
@@ -138,15 +140,22 @@ case class DexPage(dexEndpoint: Endpoint) {
     cls := "inputBox"
   )
 
-  // TODO: re-incorporate this with dropdown for different tickers.
-  val inputPair = div(
-    "Pair Address: ",
-    pairAddressInput,
-    button("Change Pair", onClick.mapTo(pairAddressInput.ref.value.toLowerCase) --> selectedPair, cls := "button"),
-    cls := "label"
-  )
+  val inputPair = selectedPair.signal.combineWith(allPairs.signal).map {
+    case (selected, all) =>
+      val options = all.take(10).map { pair =>
+        val isSelected = pair.id == selected
+        div(
+          L.span(pair.name, cls := "label"),
+          input(typ             := "checkbox", onChange.mapTo(pair.id) --> selectedPair, checked := isSelected))
+      }
+      div(
+        div("Top 10 Pairs by Volume: ", cls:= "label", color.green),
+        options
+      )
+  }
 
   val content = div(
+    child <-- inputPair,
     SwapStats($swapsWithinInterval),
     minTransaction,
     sliderContent,

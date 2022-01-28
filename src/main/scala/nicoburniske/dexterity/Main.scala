@@ -1,8 +1,7 @@
 package nicoburniske.dexterity
 
-import caliban.client.laminext._
+import com.raquo.laminar.api.L
 import com.raquo.laminar.api.L._
-import io.laminext.websocket.WebSocket
 import nicoburniske.dexterity.exchange.Subgraph
 import nicoburniske.dexterity.exchange.Subgraph.Endpoint
 import org.scalajs.dom
@@ -10,13 +9,23 @@ import org.scalajs.dom
 object Main {
   val CONTAINER = "appContainer"
 
-  val subgraph: Var[Endpoint] = Var(Subgraph.Avax)
+  val selectedSubgraph: Var[Endpoint] = Var(Subgraph.Avax)
 
-  //TODO: add chain switching.
+  val $page = selectedSubgraph.signal.map(DexPage(_)).map(_.html)
 
-  val $page = subgraph.signal.map(DexPage(_)).map(_.html)
+  val selectNetwork = selectedSubgraph.signal.map { selected =>
+    Subgraph.ALL.map { subgraph =>
+      val isSelected = subgraph == selected
+      div(
+        L.span(subgraph.name, cls := "label"),
+        input(typ                 := "checkbox", onChange.mapTo(subgraph) --> selectedSubgraph, checked := isSelected)
+      )
+    }
+  }
 
   val app = div(
+    div("Networks: ", cls:= "label", color.green),
+    child <-- selectNetwork.map(div(_)),
     child <-- $page
   )
 

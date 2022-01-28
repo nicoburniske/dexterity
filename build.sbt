@@ -23,7 +23,8 @@ Compile / npmDependencies ++= Seq(
   "@material/mwc-linear-progress"   -> "0.18.0",
   "@material/mwc-slider"            -> "0.18.0",
   "@material/mwc-list"              -> "0.25.3",
-  "@material/mwc-circular-progress" -> "0.25.3"
+  "@material/mwc-circular-progress" -> "0.25.3",
+  "@material/select"                -> "0.25.3"
 )
 
 scalaJSLinkerConfig ~= {
